@@ -5,9 +5,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -17,9 +20,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.util.UUID
 
-private data class FilmProject(
+data class FilmProject(
     val id: String,
     val title: String,
     val description: String,
@@ -29,33 +31,22 @@ private data class FilmProject(
 
 @Composable
 fun ProjectsScreen(
-    onProjectClick: (String) -> Unit = {}
+    projects: List<FilmProject>,
+    onCreateProject: (String, String) -> Unit,
+    onProjectClick: (String) -> Unit
 ) {
     val gold = Color(0xFFFFD99A)
     val muted = Color(0xFFB9B1C8)
 
-    val projects = remember {
-        mutableStateListOf(
-            FilmProject(
-                id = "sample-1",
-                title = "The Last Train",
-                description = "A chance meeting on a quiet journey home.",
-                totalShots = 12,
-                filmedShots = 4
-            ),
-            FilmProject(
-                id = "sample-2",
-                title = "Sunday Morning",
-                description = "Finding a little magic in everyday moments.",
-                totalShots = 8,
-                filmedShots = 2
-            )
-        )
+    var showNewProject by rememberSaveable {
+        mutableStateOf(false)
     }
-
-    var showNewProject by remember { mutableStateOf(false) }
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
+    var title by rememberSaveable {
+        mutableStateOf("")
+    }
+    var description by rememberSaveable {
+        mutableStateOf("")
+    }
 
     val totalShots = projects.sumOf { it.totalShots }
     val filmedShots = projects.sumOf { it.filmedShots }
@@ -111,6 +102,7 @@ fun ProjectsScreen(
 
             item {
                 Card(
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = Color.White.copy(alpha = 0.07f)
@@ -126,10 +118,12 @@ fun ProjectsScreen(
                             value = projects.size.toString(),
                             label = "Projects"
                         )
+
                         ProjectStatistic(
                             value = totalShots.toString(),
                             label = "Shots"
                         )
+
                         ProjectStatistic(
                             value = filmedShots.toString(),
                             label = "Filmed"
@@ -175,10 +169,38 @@ fun ProjectsScreen(
                     )
 
                     Text(
-                        text = "${projects.size} projects",
+                        text = if (projects.size == 1) {
+                            "1 project"
+                        } else {
+                            "${projects.size} projects"
+                        },
                         color = muted,
                         fontSize = 13.sp
                     )
+                }
+            }
+
+            if (projects.isEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier.padding(vertical = 20.dp)
+                    ) {
+                        Text(
+                            text = "Your first story starts here",
+                            color = Color.White,
+                            fontSize = 21.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = "Tap New Project to start planning your film.",
+                            color = muted,
+                            fontSize = 14.sp,
+                            lineHeight = 22.sp
+                        )
+                    }
                 }
             }
 
@@ -188,7 +210,9 @@ fun ProjectsScreen(
             ) { project ->
                 FilmProjectCard(
                     project = project,
-                    onClick = { onProjectClick(project.id) }
+                    onClick = {
+                        onProjectClick(project.id)
+                    }
                 )
             }
 
@@ -205,7 +229,9 @@ fun ProjectsScreen(
 
     if (showNewProject) {
         AlertDialog(
-            onDismissRequest = { showNewProject = false },
+            onDismissRequest = {
+                showNewProject = false
+            },
             containerColor = Color(0xFF252238),
             titleContentColor = Color.White,
             title = {
@@ -216,6 +242,9 @@ fun ProjectsScreen(
             },
             text = {
                 Column(
+                    modifier = Modifier.verticalScroll(
+                        rememberScrollState()
+                    ),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Text(
@@ -225,9 +254,16 @@ fun ProjectsScreen(
 
                     OutlinedTextField(
                         value = title,
-                        onValueChange = { title = it.take(60) },
-                        label = { Text("Project title") },
+                        onValueChange = {
+                            title = it.take(60)
+                        },
+                        label = {
+                            Text("Project title")
+                        },
                         singleLine = true,
+                        supportingText = {
+                            Text("${title.length}/60")
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = projectFieldColors()
@@ -235,10 +271,17 @@ fun ProjectsScreen(
 
                     OutlinedTextField(
                         value = description,
-                        onValueChange = { description = it.take(250) },
-                        label = { Text("Description (optional)") },
+                        onValueChange = {
+                            description = it.take(250)
+                        },
+                        label = {
+                            Text("Description (optional)")
+                        },
                         minLines = 3,
                         maxLines = 4,
+                        supportingText = {
+                            Text("${description.length}/250")
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = projectFieldColors()
@@ -249,15 +292,13 @@ fun ProjectsScreen(
                 TextButton(
                     enabled = title.isNotBlank(),
                     onClick = {
-                        projects.add(
-                            0,
-                            FilmProject(
-                                id = UUID.randomUUID().toString(),
-                                title = title.trim(),
-                                description = description.trim()
+                        if (title.isNotBlank()) {
+                            onCreateProject(
+                                title.trim(),
+                                description.trim()
                             )
-                        )
-                        showNewProject = false
+                            showNewProject = false
+                        }
                     },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = gold,
@@ -269,7 +310,9 @@ fun ProjectsScreen(
             },
             dismissButton = {
                 TextButton(
-                    onClick = { showNewProject = false },
+                    onClick = {
+                        showNewProject = false
+                    },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = muted
                     )
@@ -312,9 +355,16 @@ private fun FilmProjectCard(
     onClick: () -> Unit
 ) {
     val progress = if (project.totalShots > 0) {
-        project.filmedShots.toFloat() / project.totalShots
+        (project.filmedShots.toFloat() / project.totalShots)
+            .coerceIn(0f, 1f)
     } else {
         0f
+    }
+
+    val status = when {
+        project.totalShots == 0 -> "READY TO BEGIN"
+        project.filmedShots >= project.totalShots -> "FILMING COMPLETE"
+        else -> "IN PRODUCTION"
     }
 
     Card(
@@ -326,16 +376,20 @@ private fun FilmProjectCard(
     ) {
         Column(
             modifier = Modifier
+                .fillMaxWidth()
                 .clickable(onClick = onClick)
                 .padding(20.dp)
         ) {
             Text(
-                text = if (project.totalShots == 0) {
-                    "READY TO BEGIN"
+                text = status,
+                color = if (
+                    project.totalShots > 0 &&
+                    project.filmedShots >= project.totalShots
+                ) {
+                    Color(0xFFA8DEBB)
                 } else {
-                    "IN PRODUCTION"
+                    Color(0xFFFFD99A)
                 },
-                color = Color(0xFFFFD99A),
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.sp
@@ -367,7 +421,6 @@ private fun FilmProjectCard(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // A simple progress track without extra dependencies.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -380,7 +433,7 @@ private fun FilmProjectCard(
                 if (progress > 0f) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(progress.coerceIn(0f, 1f))
+                            .fillMaxWidth(progress)
                             .fillMaxHeight()
                             .background(
                                 Color(0xFFFFD99A),
@@ -421,13 +474,32 @@ private fun projectFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedBorderColor = Color(0xFFFFD99A),
     unfocusedBorderColor = Color(0xFF777085),
     focusedLabelColor = Color(0xFFFFD99A),
-    unfocusedLabelColor = Color(0xFFB9B1C8)
+    unfocusedLabelColor = Color(0xFFB9B1C8),
+    focusedSupportingTextColor = Color(0xFFB9B1C8),
+    unfocusedSupportingTextColor = Color(0xFFB9B1C8)
 )
 
 @Preview(showBackground = true)
 @Composable
 private fun ProjectsScreenPreview() {
     MaterialTheme {
-        ProjectsScreen()
+        ProjectsScreen(
+            projects = listOf(
+                FilmProject(
+                    id = "preview-1",
+                    title = "The Last Train",
+                    description = "A chance meeting on a quiet journey home.",
+                    totalShots = 2,
+                    filmedShots = 1
+                ),
+                FilmProject(
+                    id = "preview-2",
+                    title = "Sunday Morning",
+                    description = "Finding a little magic in everyday moments."
+                )
+            ),
+            onCreateProject = { _, _ -> },
+            onProjectClick = {}
+        )
     }
 }
